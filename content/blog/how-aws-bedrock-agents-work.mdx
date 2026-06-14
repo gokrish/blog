@@ -1,0 +1,394 @@
+---
+title: "How AWS Bedrock Agents Work: Architecture Deep Dive"
+description: "A complete technical breakdown of Amazon Bedrock Agents — the orchestration engine, action groups, knowledge bases, memory, and how to architect secure multi-agent systems."
+date: "2026-06-05"
+category: "AWS Bedrock"
+tags: ["AWS Bedrock", "AI Agents", "Agentic AI", "Architecture", "LLM"]
+author: "Gopi Krishna Pamidala"
+published: true
+featured: true
+---
+
+## The Core Architecture
+
+Amazon Bedrock Agents implement the **ReAct (Reasoning + Acting)** pattern — a loop where the LLM reasons about its current state, decides what action to take, observes the result, and iterates until the task is complete.
+
+```
+User Query → Agent (LLM) → Reasoning
+                ↓
+            Action Decision
+                ↓
+         Action Group (Lambda/API)
+                ↓
+            Observation
+                ↓
+         [Loop until done]
+                ↓
+         Final Response → User
+```
+
+The orchestration is managed entirely by Bedrock — you define the *what* (action groups, knowledge bases, guardrails), and Bedrock handles the *how* (prompt construction, response parsing, tool calling loop).
+
+---
+
+## Components of a Bedrock Agent
+
+### Foundation Model (FM)
+
+The "brain" of the agent. Bedrock Agents support:
+
+| Model | Best For | Max Context |
+|---|---|---|
+| Claude 3.5 Sonnet | General-purpose, complex reasoning | 200K tokens |
+| Claude 3 Haiku | Speed/cost optimized | 200K tokens |
+| Amazon Titan | AWS-native workloads | 32K tokens |
+| Llama 3 70B | Open source, privacy-sensitive | 128K tokens |
+
+For security-critical agentic workflows, Claude 3.5 Sonnet is preferred — Anthropic's Constitutional AI training results in stronger refusal behavior for harmful tool use.
+
+### Action Groups
+
+Action groups define what tools the agent can use. Each action group consists of:
+
+1. **API Schema** (OpenAPI 3.0): Describes the available functions, parameters, and return types
+2. **Lambda Function**: The actual implementation invoked when the agent calls a tool
+3. **Executor**: Either AWS Lambda or an inline code executor
+
+```json
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Security Audit API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/scan-resource": {
+      "post": {
+        "operationId": "scanResource",
+        "summary": "Scan an AWS resource for security misconfigurations",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "resourceArn": {
+                    "type": "string",
+                    "description": "The ARN of the AWS resource to scan"
+                  },
+                  "scanType": {
+                    "type": "string",
+                    "enum": ["BASIC", "DEEP", "COMPLIANCE"],
+                    "description": "Depth of security scan to perform"
+                  }
+                },
+                "required": ["resourceArn"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scan results with findings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "findings": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "severity": {
+                      "type": "string",
+                      "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Knowledge Bases
+
+Knowledge Bases enable **Retrieval-Augmented Generation (RAG)** within agents. The agent can query structured knowledge stores and ground responses in verified data.
+
+**Supported vector stores:**
+- Amazon OpenSearch Serverless
+- Amazon Aurora (PostgreSQL with pgvector)
+- MongoDB Atlas
+- Pinecone
+- Redis Enterprise Cloud
+
+```python
+import boto3
+
+# Create a Knowledge Base
+bedrock_agent = boto3.client("bedrock-agent", region_name="us-east-1")
+
+kb_response = bedrock_agent.create_knowledge_base(
+    name="security-knowledge-base",
+    description="Internal security policies, runbooks, and compliance documentation",
+    roleArn="arn:aws:iam::123456789012:role/BedrockKBRole",
+    knowledgeBaseConfiguration={
+        "type": "VECTOR",
+        "vectorKnowledgeBaseConfiguration": {
+            "embeddingModelArn": "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0",
+            "embeddingModelConfiguration": {
+                "bedrockEmbeddingModelConfiguration": {
+                    "dimensions": 1024,
+                    "embeddingDataType": "FLOAT32"
+                }
+            }
+        }
+    },
+    storageConfiguration={
+        "type": "OPENSEARCH_SERVERLESS",
+        "opensearchServerlessConfiguration": {
+            "collectionArn": "arn:aws:aoss:us-east-1:123456789012:collection/security-kb",
+            "vectorIndexName": "security-docs-index",
+            "fieldMapping": {
+                "vectorField": "embedding",
+                "textField": "content",
+                "metadataField": "metadata"
+            }
+        }
+    }
+)
+```
+
+---
+
+## Building a Secure AI Security Agent
+
+Here's a production-grade agent for security analysis:
+
+```python
+import boto3
+import json
+from typing import Optional
+
+class SecurityAnalystAgent:
+    """AI-powered security analyst agent using Bedrock."""
+    
+    def __init__(self, region: str = "us-east-1"):
+        self.bedrock_agent_runtime = boto3.client(
+            "bedrock-agent-runtime",
+            region_name=region
+        )
+        self.agent_id = "YOUR_AGENT_ID"
+        self.agent_alias_id = "TSTALIASID"  # Use proper alias in prod
+        self.guardrail_id = "YOUR_GUARDRAIL_ID"
+        self.guardrail_version = "1"
+    
+    def analyze_threat(
+        self,
+        threat_description: str,
+        session_id: str,
+        context: Optional[dict] = None,
+    ) -> dict:
+        """Run the security analyst agent on a threat description."""
+        
+        # Build enriched prompt with context
+        prompt = threat_description
+        if context:
+            prompt = f"""
+Threat Context:
+- Environment: {context.get('environment', 'Unknown')}
+- Severity: {context.get('severity', 'Unknown')}
+- Affected Resources: {', '.join(context.get('resources', []))}
+
+Threat Description: {threat_description}
+
+Please analyze this security event and provide:
+1. Threat classification and MITRE ATT&CK mapping
+2. Immediate containment actions
+3. Investigation steps
+4. Long-term remediation recommendations
+"""
+        
+        response = self.bedrock_agent_runtime.invoke_agent(
+            agentId=self.agent_id,
+            agentAliasId=self.agent_alias_id,
+            sessionId=session_id,
+            inputText=prompt,
+            guardrailConfiguration={
+                "guardrailId": self.guardrail_id,
+                "guardrailVersion": self.guardrail_version,
+            },
+            enableTrace=True,
+        )
+        
+        # Stream the response
+        full_response = ""
+        trace_data = []
+        
+        for event in response["completion"]:
+            if "chunk" in event:
+                full_response += event["chunk"]["bytes"].decode("utf-8")
+            if "trace" in event:
+                trace_data.append(event["trace"])
+        
+        return {
+            "analysis": full_response,
+            "session_id": session_id,
+            "trace": trace_data,
+        }
+    
+    def reset_session(self, session_id: str) -> None:
+        """Delete a session to clear agent memory."""
+        self.bedrock_agent_runtime.delete_agent_memory(
+            agentId=self.agent_id,
+            agentAliasId=self.agent_alias_id,
+            sessionId=session_id,
+        )
+```
+
+---
+
+## Action Group Lambda: Security Best Practices
+
+The Lambda function backing an action group is a critical attack surface. Secure it properly:
+
+```python
+import json
+import boto3
+import logging
+from typing import Any
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# NEVER hardcode credentials — use IAM role
+ec2_client = boto3.client("ec2")
+security_hub = boto3.client("securityhub")
+
+def lambda_handler(event: dict, context: Any) -> dict:
+    """Secure action group handler for Bedrock Agent."""
+    
+    # Validate the event source is Bedrock
+    agent_info = event.get("agent", {})
+    if not agent_info.get("agentId"):
+        logger.error("Unauthorized invocation — not from Bedrock Agent")
+        return error_response("Unauthorized", 403)
+    
+    action_group = event.get("actionGroup", "")
+    function_name = event.get("function", "")
+    parameters = event.get("parameters", [])
+    
+    # Convert parameter list to dict
+    params = {p["name"]: p["value"] for p in parameters}
+    
+    logger.info(json.dumps({
+        "action": function_name,
+        "agent_id": agent_info.get("agentId"),
+        "params_keys": list(params.keys()),  # Log keys, NOT values (avoid PII)
+    }))
+    
+    try:
+        if function_name == "scanResource":
+            result = scan_resource(params)
+        elif function_name == "getSecurityFindings":
+            result = get_security_findings(params)
+        else:
+            return error_response(f"Unknown function: {function_name}", 400)
+        
+        return {
+            "actionGroup": action_group,
+            "function": function_name,
+            "functionResponse": {
+                "responseBody": {
+                    "TEXT": {"body": json.dumps(result)}
+                }
+            }
+        }
+    
+    except Exception as e:
+        logger.error(f"Action group error: {str(e)}")
+        return error_response("Internal error processing request", 500)
+
+def scan_resource(params: dict) -> dict:
+    """Scan an AWS resource for security issues."""
+    resource_arn = params.get("resourceArn", "")
+    
+    # Validate ARN format before proceeding
+    if not resource_arn.startswith("arn:aws:"):
+        raise ValueError("Invalid resource ARN format")
+    
+    # Query Security Hub for existing findings
+    response = security_hub.get_findings(
+        Filters={
+            "ResourceId": [{"Value": resource_arn, "Comparison": "EQUALS"}],
+            "RecordState": [{"Value": "ACTIVE", "Comparison": "EQUALS"}],
+        },
+        MaxResults=10,
+    )
+    
+    findings = response.get("Findings", [])
+    
+    return {
+        "resource_arn": resource_arn,
+        "total_findings": len(findings),
+        "findings": [
+            {
+                "title": f.get("Title"),
+                "severity": f.get("Severity", {}).get("Label"),
+                "status": f.get("Workflow", {}).get("Status"),
+            }
+            for f in findings
+        ],
+    }
+
+def error_response(message: str, code: int) -> dict:
+    return {
+        "actionGroup": "",
+        "function": "",
+        "functionResponse": {
+            "responseBody": {
+                "TEXT": {"body": json.dumps({"error": message, "code": code})}
+            }
+        }
+    }
+```
+
+---
+
+## Multi-Agent Orchestration
+
+For complex workflows, Bedrock supports **Supervisor + Sub-agent** patterns:
+
+```
+[User] → [Supervisor Agent]
+              ↓
+    ┌─────────┼──────────┐
+    ↓         ↓          ↓
+[Threat    [Remediation  [Compliance
+ Intel      Agent]       Agent]
+ Agent]
+```
+
+The supervisor agent receives the task, decomposes it, and delegates to specialized sub-agents via the **Agent-to-Agent (A2A)** protocol — each sub-agent runs independently with its own tools, knowledge bases, and guardrails.
+
+---
+
+## Memory and Session Management
+
+Bedrock Agents support two memory types:
+
+1. **Session Memory**: Conversation history within a single session (default, ephemeral)
+2. **Long-term Memory**: Persistent facts extracted across sessions (requires explicit configuration)
+
+For enterprise deployments, implement session isolation: each user gets a unique `sessionId` (UUID), and sessions are cleared after inactivity or sensitive operations.
+
+---
+
+## Summary
+
+Bedrock Agents abstract the complexity of agentic orchestration — prompt construction, tool calling, response parsing — while giving you control over the security posture via guardrails, IAM roles, and Lambda action group design. The key to secure agent deployment: **least-privilege IAM for every component**, **input validation in Lambda handlers**, **guardrails on every invocation**, and **session isolation per user**.

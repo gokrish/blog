@@ -1,0 +1,100 @@
+---
+title: "Advanced Threat Hunting: Building a Wazuh XDR Home Lab on OCI"
+description: "A comprehensive guide on deploying Wazuh XDR on Oracle Cloud Infrastructure (OCI) to aggregate logs and hunt for LLM-based threats."
+date: "2026-05-08T00:37:48.159Z"
+updatedAt: "2026-06-13T23:35:00.000Z"
+author: "Gopi Krishna Pamidala"
+category: "Cybersecurity"
+tags: ["wazuh xdr", "oci", "home lab", "threat hunting", "log analysis"]
+featured: false
+published: true
+---
+
+To truly master AI Security and Incident Response, theory isn't enough. You need a sandbox where you can simulate attacks, aggregate logs, and trigger automated responses.
+
+In this guide, I will break down how I built my advanced **Home Lab** utilizing **Wazuh XDR** hosted on **Oracle Cloud Infrastructure (OCI)**. This lab serves as the backbone for my threat-hunting experiments, particularly for monitoring anomalous behavior in LLM applications and AWS Bedrock API calls.
+
+---
+
+## 1. Why OCI and Wazuh?
+
+**Oracle Cloud Infrastructure (OCI)** offers a highly generous "Always Free" tier, which provides up to 4 ARM Ampere A1 Compute instances with 24GB of RAM. This is exceptionally powerful for a home lab and perfectly meets the resource requirements for the Wazuh central manager and indexer.
+
+**Wazuh** is an open-source, enterprise-ready security monitoring solution that provides XDR (Extended Detection and Response) and SIEM capabilities. It excels at analyzing log data, file integrity monitoring, and active response.
+
+## 2. Deploying Wazuh on OCI
+
+### Infrastructure Setup
+
+1. **Provision the Instance:** In OCI, provision an Ampere A1 Compute instance (Oracle Linux or Ubuntu 22.04) with at least 4 OCPUs and 16GB RAM.
+2. **VCN Configuration:** Configure your Virtual Cloud Network (VCN) to allow inbound traffic on ports `443` (Wazuh Dashboard), `1514` (Agent connection), and `1515` (Agent enrollment).
+
+### Wazuh Installation Script
+
+Instead of manual installation, the Wazuh unattended installation script simplifies deploying the Indexer, Server, and Dashboard on a single node.
+
+```bash
+# Download the Wazuh installation assistant
+curl -sO https://packages.wazuh.com/4.x/wazuh-install.sh
+
+# Run the assistant with the "-a" flag for an all-in-one installation
+sudo bash wazuh-install.sh -a
+```
+
+Once completed, the script outputs the administrative credentials for the Wazuh Dashboard.
+
+## 3. Integrating AWS Bedrock Logs
+
+The real power of this lab is ingesting logs from our AI applications. If an AWS Bedrock agent is compromised via prompt injection, the first indicator of compromise (IoC) will be anomalous API usage logged in AWS CloudTrail.
+
+### Configuring the Wazuh AWS Module
+
+Wazuh natively integrates with AWS to pull CloudTrail logs.
+
+1. **AWS IAM:** Create an IAM user in AWS with read-only access to the S3 bucket where CloudTrail logs are stored.
+2. **Wazuh Configuration:** Edit the `/var/ossec/etc/ossec.conf` file on the Wazuh manager.
+
+```xml
+<ossec_config>
+  <integration>
+    <name>aws-s3</name>
+    <bucket>my-bedrock-cloudtrail-logs</bucket>
+    <access_key>YOUR_AWS_ACCESS_KEY</access_key>
+    <secret_key>YOUR_AWS_SECRET_KEY</secret_key>
+    <aws_profile>default</aws_profile>
+  </integration>
+</ossec_config>
+```
+
+## 4. Threat Hunting for LLM Anomalies
+
+With CloudTrail logs flowing into Wazuh, we can write custom decoders and rules to hunt for specific AI threats.
+
+### Scenario: Anomalous Model Invocation
+If a developer's IAM credentials leak, an attacker might attempt to query the `InvokeModel` API excessively to incur costs or extract data.
+
+**Custom Wazuh Rule:**
+```xml
+<group name="aws, bedrock, anomaly">
+  <rule id="100050" level="10" frequency="50" timeframe="120">
+    <if_matched_sid>80202</if_matched_sid> <!-- AWS CloudTrail base rule -->
+    <match>InvokeModel</match>
+    <description>AWS Bedrock Anomaly: High frequency of InvokeModel calls detected from a single IAM user.</description>
+    <mitre>
+      <id>T1499</id> <!-- Endpoint Denial of Service -->
+    </mitre>
+  </rule>
+</group>
+```
+
+When this rule is triggered, Wazuh generates a Severity 10 alert.
+
+## 5. Active Response Integration
+
+In my TD Bank experience, identifying the threat is only step one; automated containment is step two. 
+
+In the home lab, we can configure a **Wazuh Active Response** to run a Python script that uses `boto3` to automatically attach a "Deny All" policy to the compromised IAM user.
+
+## Conclusion
+
+Building a Wazuh XDR home lab on OCI bridges the gap between theoretical AI Security and practical SecOps. By pulling AWS Bedrock logs into Wazuh, writing custom detection rules, and configuring active responses, you can simulate and defend against the exact types of threats facing enterprise AI deployments today.

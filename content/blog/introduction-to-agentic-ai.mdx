@@ -1,0 +1,254 @@
+---
+title: "Introduction to Agentic AI: Patterns, Protocols, and Architecture"
+description: "A practical introduction to Agentic AI — what makes an AI system truly agentic, key design patterns, MCP and A2A protocols, and how to architect reliable multi-agent systems."
+date: "2026-05-20"
+category: "Agentic AI"
+tags: ["Agentic AI", "AI Agents", "MCP", "A2A Protocol", "Architecture", "LLM"]
+author: "Gopi Krishna Pamidala"
+published: true
+---
+
+## What Makes AI "Agentic"?
+
+The term "agentic" describes AI systems that can autonomously **plan**, **use tools**, **observe outcomes**, and **iterate** toward a goal — without requiring human input at each step. This is fundamentally different from a simple chatbot that responds to single-turn queries.
+
+The spectrum of agentic capability:
+
+| Level | Description | Example |
+|---|---|---|
+| 0 — Reactive | Single input → single output | Basic chatbot |
+| 1 — Tool-Using | Can call external APIs | ChatGPT with plugins |
+| 2 — Multi-step | Plans and executes sequences | Bedrock Agents |
+| 3 — Multi-agent | Orchestrates other agents | A2A systems |
+| 4 — Autonomous | Long-horizon goal pursuit | Research agents |
+
+---
+
+## Core Agentic Patterns
+
+### ReAct (Reasoning + Acting)
+
+The foundational agentic pattern: the LLM alternates between reasoning about the current state and taking actions.
+
+```
+Thought: I need to find the current vulnerability count for this S3 bucket.
+Action: call_tool("get_security_hub_findings", {"resource": "arn:aws:s3:::my-bucket"})
+Observation: {"findings": 3, "critical": 1, "high": 2}
+Thought: There are 3 findings, 1 critical. I should get details on the critical one.
+Action: call_tool("get_finding_details", {"finding_id": "finding-001"})
+Observation: {"title": "S3 bucket public read ACL enabled", "remediation": "..."}
+Thought: Now I have enough information to provide a complete analysis.
+Final Answer: The S3 bucket has 3 security findings...
+```
+
+### Plan-and-Execute
+
+Separate planning from execution for complex, multi-step tasks:
+
+```python
+class PlanExecuteAgent:
+    def run(self, goal: str) -> str:
+        # Phase 1: Planning (uses a powerful planner model)
+        plan = self.planner.create_plan(goal)
+        # [Step 1: Inventory all S3 buckets, Step 2: Check each for public ACLs, ...]
+        
+        # Phase 2: Execution (runs each step, can use smaller models)
+        results = []
+        for step in plan.steps:
+            result = self.executor.run_step(step, context=results)
+            results.append(result)
+            
+            # Re-plan if a step fails or produces unexpected results
+            if result.needs_replanning:
+                plan = self.planner.replan(goal, completed=results, failed_step=step)
+        
+        # Phase 3: Synthesis
+        return self.synthesizer.combine(goal, results)
+```
+
+### Reflection and Self-Critique
+
+Agents that critique their own outputs improve reliability:
+
+```python
+REFLECTION_PROMPT = """
+You just generated the following response:
+<response>{response}</response>
+
+Critically evaluate this response:
+1. Is it factually accurate based on the available evidence?
+2. Are there logical gaps or unsupported claims?
+3. Are there security implications I missed?
+4. What would make this response better?
+
+If the response needs improvement, provide a revised version.
+If it's satisfactory, output: [RESPONSE_ACCEPTED]
+"""
+```
+
+---
+
+## The Model Context Protocol (MCP)
+
+MCP, introduced by Anthropic in 2024, is a standardized protocol for connecting AI models to external tools and data sources. Think of it as USB-C for AI tool integration.
+
+### Why MCP Matters
+
+Before MCP, every AI application had to build bespoke integrations for every tool. MCP standardizes:
+
+- **Tool discovery**: AI models can discover available tools at runtime
+- **Tool invocation**: Standardized request/response format
+- **Resource access**: Files, databases, APIs via a common interface
+- **Prompt templates**: Reusable, composable prompt building blocks
+
+### MCP Server Example (Python)
+
+```python
+from mcp.server import Server
+from mcp.server.models import InitializationOptions
+import mcp.server.stdio
+import mcp.types as types
+
+server = Server("security-audit-server")
+
+@server.list_tools()
+async def handle_list_tools() -> list[types.Tool]:
+    """Advertise available security audit tools."""
+    return [
+        types.Tool(
+            name="scan_aws_account",
+            description="Scan an AWS account for security misconfigurations using AWS Security Hub",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "account_id": {
+                        "type": "string",
+                        "description": "AWS account ID to scan"
+                    },
+                    "regions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "AWS regions to scan"
+                    }
+                },
+                "required": ["account_id"]
+            }
+        ),
+    ]
+
+@server.call_tool()
+async def handle_call_tool(
+    name: str, arguments: dict | None
+) -> list[types.TextContent]:
+    """Execute a security tool."""
+    
+    if name == "scan_aws_account":
+        account_id = arguments.get("account_id", "")
+        regions = arguments.get("regions", ["us-east-1"])
+        
+        # Validate inputs
+        if not account_id.isdigit() or len(account_id) != 12:
+            return [types.TextContent(type="text", text="Error: Invalid AWS account ID format")]
+        
+        # Perform the scan
+        findings = await perform_security_scan(account_id, regions)
+        
+        return [types.TextContent(
+            type="text",
+            text=f"Scan complete. Found {len(findings)} issues:\n" + 
+                 "\n".join(f"- {f['title']} ({f['severity']})" for f in findings)
+        )]
+    
+    raise ValueError(f"Unknown tool: {name}")
+
+async def main():
+    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream, write_stream,
+            InitializationOptions(server_name="security-audit-server", server_version="1.0.0")
+        )
+```
+
+---
+
+## Agent-to-Agent (A2A) Protocol
+
+A2A enables structured communication between AI agents — a supervisor agent delegating tasks to specialist sub-agents. Google's A2A protocol (2025) standardized this with:
+
+- **Agent Cards**: JSON metadata describing an agent's capabilities, skills, and authentication requirements
+- **Task Delegation**: Structured task assignment with defined inputs/outputs
+- **Streaming Updates**: Real-time progress from long-running sub-agents
+- **Authentication**: OAuth 2.0 for agent identity verification
+
+```json
+{
+  "agentCard": {
+    "name": "Threat Intel Analyst Agent",
+    "version": "1.0.0",
+    "description": "Specializes in threat intelligence analysis and MITRE ATT&CK mapping",
+    "capabilities": {
+      "skills": ["threat_analysis", "ioc_enrichment", "mitre_mapping"],
+      "streaming": true,
+      "authentication": ["oauth2"]
+    },
+    "endpoints": {
+      "tasks": "https://agents.internal/threat-intel/tasks",
+      "health": "https://agents.internal/threat-intel/health"
+    }
+  }
+}
+```
+
+---
+
+## Reliability Patterns for Production Agents
+
+### 1. Timeouts and Retries
+
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import asyncio
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    retry=retry_if_exception_type((TimeoutError, ConnectionError))
+)
+async def invoke_agent_with_retry(agent, prompt: str, timeout: int = 30) -> str:
+    async with asyncio.timeout(timeout):
+        return await agent.invoke(prompt)
+```
+
+### 2. Output Schema Validation
+
+```python
+from pydantic import BaseModel, validator
+from typing import Literal
+
+class SecurityAnalysisOutput(BaseModel):
+    threat_level: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    mitre_techniques: list[str]
+    immediate_actions: list[str]
+    confidence_score: float
+    
+    @validator("confidence_score")
+    def validate_confidence(cls, v):
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("Confidence must be between 0 and 1")
+        return v
+    
+    @validator("mitre_techniques")
+    def validate_mitre_format(cls, techniques):
+        import re
+        pattern = re.compile(r"T\d{4}(\.\d{3})?")
+        for t in techniques:
+            if not pattern.match(t):
+                raise ValueError(f"Invalid MITRE technique format: {t}")
+        return techniques
+```
+
+---
+
+## Summary
+
+Agentic AI represents a fundamental shift in how we build AI systems — from reactive responders to autonomous goal-seekers. The key to reliable production agents is combining strong **design patterns** (ReAct, Plan-Execute, Reflection) with robust **safety rails** (tool sandboxing, output validation, timeout handling) and emerging **standards** (MCP for tool integration, A2A for agent coordination). Start simple, add capabilities incrementally, and always design for failure.

@@ -1,0 +1,292 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── NextAuth Models ──────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(VIEWER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  posts    Post[]
+  comments Comment[]
+  auditLogs AuditLog[]
+}
+
+// ─── Blog Posts ───────────────────────────────────────────────────────────────
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  SCHEDULED
+}
+
+model Post {
+  id            String     @id @default(cuid())
+  slug          String     @unique
+  title         String
+  excerpt       String?    @db.Text
+  content       String?    @db.Text
+  mdxSource     String?    @db.Text
+  status        PostStatus @default(DRAFT)
+  featured      Boolean    @default(false)
+  featuredImage String?
+  ogImage       String?
+  metaTitle     String?
+  metaDesc      String?    @db.Text
+  readingTime   Int?       // minutes
+  views         Int        @default(0)
+  publishedAt   DateTime?
+  scheduledAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  authorId   String
+  author     User         @relation(fields: [authorId], references: [id])
+  categoryId String?
+  category   Category?    @relation(fields: [categoryId], references: [id])
+  tags       PostTag[]
+  comments   Comment[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([authorId])
+  @@index([categoryId])
+}
+
+// ─── Categories ───────────────────────────────────────────────────────────────
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  slug        String  @unique
+  description String? @db.Text
+  color       String  @default("#06b6d4") // tailwind cyan-500
+  icon        String? // lucide icon name
+  posts       Post[]
+
+  @@index([slug])
+}
+
+// ─── Tags ─────────────────────────────────────────────────────────────────────
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  slug  String    @unique
+  posts PostTag[]
+
+  @@index([slug])
+}
+
+model PostTag {
+  postId String
+  tagId  String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+// ─── Comments ─────────────────────────────────────────────────────────────────
+
+enum CommentStatus {
+  PENDING
+  APPROVED
+  SPAM
+  DELETED
+}
+
+model Comment {
+  id        String        @id @default(cuid())
+  body      String        @db.Text
+  status    CommentStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  postId   String
+  post     Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id])
+
+  // For guest comments
+  guestName  String?
+  guestEmail String?
+
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies  Comment[] @relation("CommentReplies")
+
+  @@index([postId])
+  @@index([status])
+}
+
+// ─── Newsletter Subscribers ───────────────────────────────────────────────────
+
+enum SubscriberStatus {
+  PENDING
+  CONFIRMED
+  UNSUBSCRIBED
+}
+
+model Subscriber {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  firstName      String?
+  status         SubscriberStatus @default(PENDING)
+  confirmToken   String?          @unique
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+  source         String?          // homepage, blog, footer, etc.
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([confirmToken])
+}
+
+// ─── Contact Messages ─────────────────────────────────────────────────────────
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String
+  message   String   @db.Text
+  read      Boolean  @default(false)
+  replied   Boolean  @default(false)
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([read])
+  @@index([createdAt])
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  WIPS
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  title       String
+  description String        @db.Text
+  longDesc    String?       @db.Text
+  techStack   String[]      // array of tech names
+  githubUrl   String?
+  demoUrl     String?
+  imageUrl    String?
+  featured    Boolean       @default(false)
+  status      ProjectStatus @default(ACTIVE)
+  order       Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([featured])
+  @@index([status])
+}
+
+// ─── Page Views (privacy-friendly analytics) ──────────────────────────────────
+
+model PageView {
+  id        String   @id @default(cuid())
+  path      String
+  sessionId String?
+  referrer  String?
+  country   String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([path])
+  @@index([createdAt])
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}

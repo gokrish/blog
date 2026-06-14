@@ -1,0 +1,248 @@
+---
+title: "Building AI Governance Frameworks for Enterprise LLM Deployments"
+description: "A practical guide to AI governance for enterprise LLM deployments — policies, risk classification, audit requirements, compliance mapping, and organizational accountability structures."
+date: "2026-03-28"
+category: "AI Security"
+tags: ["AI Governance", "LLM Security", "Compliance", "Risk Management", "Enterprise AI"]
+author: "Gopi Krishna Pamidala"
+published: true
+---
+
+## Why AI Governance Cannot Be an Afterthought
+
+The pattern is familiar from cloud adoption: organizations rush to deploy AI capabilities for competitive advantage, accumulate ungoverned AI debt, and then scramble when regulators, auditors, or incidents force remediation. AI governance is cheaper to build in than to retrofit.
+
+The EU AI Act (effective August 2024), NIST AI RMF, and emerging SEC cybersecurity disclosure rules all create legal pressure for documented AI governance. But beyond compliance, governance is operationally necessary — AI systems that lack accountability structures fail silently and unpredictably.
+
+---
+
+## AI Risk Tiering
+
+Not all AI use cases carry equal risk. Establish a tiering framework before deploying any system:
+
+| Tier | Risk Level | Examples | Required Controls |
+|---|---|---|---|
+| Tier 1 | Critical | Medical diagnosis, credit decisions, criminal justice | Mandatory human review, explainability, bias audit, regulatory approval |
+| Tier 2 | High | HR screening, financial advice, security operations | Human-in-the-loop, regular bias testing, full audit trail |
+| Tier 3 | Medium | Customer service, document summarization, code assistance | Guardrails, output monitoring, usage logging |
+| Tier 4 | Low | Internal productivity, spell check, scheduling | Basic usage policy, access controls |
+
+```python
+from enum import Enum
+from dataclasses import dataclass
+
+class AIRiskTier(Enum):
+    CRITICAL = 1
+    HIGH = 2
+    MEDIUM = 3
+    LOW = 4
+
+@dataclass
+class AISystemRegistration:
+    system_id: str
+    system_name: str
+    description: str
+    risk_tier: AIRiskTier
+    business_owner: str
+    technical_owner: str
+    data_classification: str  # PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED
+    training_data_sources: list[str]
+    model_id: str
+    deployment_date: str
+    last_audit_date: str | None
+    guardrail_id: str | None
+    approved_use_cases: list[str]
+    prohibited_use_cases: list[str]
+    escalation_path: str
+    
+    def requires_human_review(self) -> bool:
+        return self.risk_tier in (AIRiskTier.CRITICAL, AIRiskTier.HIGH)
+    
+    def requires_quarterly_audit(self) -> bool:
+        return self.risk_tier == AIRiskTier.CRITICAL
+    
+    def requires_annual_audit(self) -> bool:
+        return self.risk_tier in (AIRiskTier.HIGH, AIRiskTier.MEDIUM)
+```
+
+---
+
+## The AI Governance Charter
+
+Every enterprise AI deployment needs a governance charter:
+
+```markdown
+# AI Governance Charter — Acme Corporation
+
+## Purpose
+This charter establishes the governance framework for all AI systems deployed
+by Acme Corporation to ensure responsible, secure, and compliant AI use.
+
+## Scope
+All AI/ML systems including large language models, automated decision systems,
+predictive analytics, and AI-assisted workflows — regardless of vendor or deployment model.
+
+## Principles
+1. HUMAN OVERSIGHT: Humans remain accountable for AI-assisted decisions
+2. TRANSPARENCY: AI use must be disclosed to affected parties where required by law
+3. FAIRNESS: AI systems must not discriminate on protected characteristics
+4. SECURITY: All AI systems must pass security review before production deployment
+5. PRIVACY: AI systems must comply with data protection requirements
+6. AUDITABILITY: AI decisions must be explainable and logged
+
+## Governance Structure
+
+### AI Steering Committee
+- Chief AI Officer (Chair)
+- Chief Information Security Officer
+- Chief Legal Officer / General Counsel
+- Chief Data Officer
+- Business Unit Representatives
+
+### Responsibilities
+| Role | Responsibility |
+|---|---|
+| Business Owner | Use case justification, risk acceptance, budget |
+| CISO | Security review, guardrail approval, incident response |
+| CDO | Data governance, privacy compliance, data quality |
+| MLOps Team | Technical deployment, monitoring, maintenance |
+| Legal/Compliance | Regulatory compliance, contract review |
+
+## Mandatory Requirements
+
+### Before Deployment
+- [ ] AI risk tier assessment completed
+- [ ] Security review passed (CISO sign-off)
+- [ ] Privacy Impact Assessment (PIA) completed for Tier 1-2
+- [ ] Bias and fairness evaluation completed
+- [ ] Data lineage documentation
+- [ ] Incident response plan defined
+- [ ] User training completed
+- [ ] System registered in AI inventory
+
+### Ongoing Requirements
+- [ ] Monthly usage and anomaly reporting
+- [ ] Quarterly guardrail effectiveness review
+- [ ] Annual full audit (Tier 2)
+- [ ] Semi-annual audit (Tier 1)
+- [ ] Incident reporting within 24 hours of discovery
+
+## Incident Response
+AI-related incidents must follow the standard incident response process with:
+- Immediate notification to CISO and Business Owner
+- Model/system suspension if Tier 1-2 and severity HIGH or CRITICAL
+- Root cause analysis within 72 hours
+- Board notification for critical incidents (per SEC guidance)
+```
+
+---
+
+## Compliance Mapping
+
+Map your AI controls to applicable frameworks:
+
+```python
+COMPLIANCE_CONTROLS = {
+    "NIST_AI_RMF": {
+        "GOVERN": [
+            "AI governance charter established",
+            "Risk tier classification framework",
+            "Roles and accountability defined",
+            "AI inventory maintained",
+        ],
+        "MAP": [
+            "Use case risk assessment",
+            "Data lineage documentation",
+            "Third-party model assessment",
+        ],
+        "MEASURE": [
+            "Bias and fairness testing",
+            "Performance monitoring",
+            "Security testing (red teaming)",
+        ],
+        "MANAGE": [
+            "Incident response procedures",
+            "Model versioning and rollback",
+            "Continuous monitoring",
+        ]
+    },
+    
+    "EU_AI_ACT": {
+        "HIGH_RISK_REQUIREMENTS": [
+            "Technical documentation",
+            "Conformity assessment",
+            "Transparency obligations",
+            "Human oversight measures",
+            "Accuracy, robustness, and security",
+            "Fundamental rights impact assessment",
+        ]
+    },
+    
+    "SOC2_TYPE2": {
+        "CC6.1": "Logical access controls",
+        "CC6.6": "Boundary protection",
+        "CC7.2": "System monitoring",
+        "CC9.2": "Risk mitigation for vendor services",
+    },
+    
+    "ISO_27001_2022": {
+        "8.25": "AI security development lifecycle",
+        "5.23": "Third-party AI service security",
+        "8.16": "AI system monitoring",
+    }
+}
+```
+
+---
+
+## AI Audit Checklist
+
+Run this checklist for each Tier 1-2 AI system quarterly:
+
+```markdown
+## AI System Audit — Q[N] [Year]
+System: [Name] | ID: [ID] | Tier: [1/2]
+
+### Security Controls
+- [ ] Guardrails active and version verified against policy
+- [ ] Input/output logging enabled and logs retained per policy
+- [ ] IAM permissions reviewed — no excessive permissions found
+- [ ] API keys and secrets rotated within policy period
+- [ ] Network access — only whitelisted endpoints reachable
+- [ ] Red team test suite run — pass rate: ___% (minimum: 95%)
+- [ ] VPC endpoint configured (if applicable)
+
+### Operational Controls
+- [ ] Model version verified — using approved version [X]
+- [ ] System prompt reviewed and unchanged from approved version
+- [ ] Usage metrics reviewed — no anomalous patterns detected
+- [ ] Error rates within acceptable thresholds: ___% (maximum: 2%)
+- [ ] Latency within SLA: ___ms p95 (maximum: [threshold])
+- [ ] Cost within budget: $[actual] vs $[budget]
+
+### Data and Privacy
+- [ ] PII detection/anonymization verified active
+- [ ] Data retention policy compliance confirmed
+- [ ] No unauthorized data sources connected
+- [ ] Training data refresh performed (if scheduled)
+
+### Incidents and Changes
+- [ ] Incident log reviewed — [N] incidents in period
+- [ ] All incidents resolved and RCA documented
+- [ ] Change log reviewed — all changes approved
+
+### Bias and Fairness
+- [ ] Bias evaluation run on representative sample
+- [ ] No statistically significant disparate impact detected
+- [ ] Fairness metrics: [specify metrics and results]
+
+### Sign-off
+Business Owner: _____________ Date: ___________
+CISO / Security: _____________ Date: ___________
+```
+
+---
+
+## Summary
+
+AI governance is not bureaucracy for its own sake — it's the institutional memory that prevents you from deploying an ungoverned AI system that creates legal liability, discriminates against users, or gets exploited by attackers. Start with a simple inventory and risk tier framework, build controls proportional to risk, and automate as much governance verification as possible. The organizations that treat AI governance as a competitive advantage (not a constraint) will build more trustworthy, more durable AI systems.

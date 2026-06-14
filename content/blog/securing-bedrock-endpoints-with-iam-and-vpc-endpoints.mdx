@@ -1,0 +1,116 @@
+---
+title: "Securing Bedrock Endpoints: Integrating AWS IAM with Fortinet SD-WAN"
+description: "A comprehensive guide to securing AWS Bedrock API traffic using VPC Endpoints, strict IAM policies, and Fortinet FortiGate Firewalls with SD-WAN."
+date: "2026-05-20T00:37:48.156Z"
+updatedAt: "2026-06-13T23:30:00.000Z"
+author: "Gopi Krishna Pamidala"
+category: "AWS Bedrock"
+tags: ["aws bedrock", "fortinet", "sd-wan", "vpc endpoints", "network security"]
+featured: false
+published: true
+---
+
+Deploying Generative AI in an enterprise environment—especially within the Banking or Healthcare sectors—requires more than just an AWS account. It demands an ironclad network perimeter.
+
+During my time as a Network and Security Engineer, deploying **Fortinet SD-WAN** for highly regulated branches, I learned that relying solely on cloud-native IAM policies is a recipe for disaster if the underlying network transport is compromised. When integrating with **AWS Bedrock**, traffic should *never* traverse the public internet.
+
+This guide outlines a defense-in-depth architecture combining **AWS VPC Endpoints (PrivateLink)**, strict **IAM Resource Policies**, and **Fortinet FortiGate** web and content filtering.
+
+---
+
+## 1. The Threat Model: Why Public Bedrock Endpoints Fail
+
+By default, calls to the AWS Bedrock API traverse the public internet. If an internal developer's credentials are compromised, or an internal agentic AI system is subject to Server-Side Request Forgery (SSRF), an attacker can exfiltrate data directly to the public Bedrock endpoint.
+
+To mitigate this, we establish a zero-trust network boundary using **AWS PrivateLink**.
+
+## 2. Implementing AWS VPC Endpoints for Bedrock
+
+A VPC Endpoint for Bedrock ensures that all API calls from your subnets route entirely through the AWS backbone network. 
+
+### Terraform Configuration
+
+```hcl
+# Create VPC Endpoint for Bedrock Runtime
+resource "aws_vpc_endpoint" "bedrock_runtime" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.us-east-1.bedrock-runtime"
+  vpc_endpoint_type = "Interface"
+
+  subnet_ids = aws_subnet.private[*].id
+  security_group_ids = [aws_security_group.bedrock_vpc_ep.id]
+  
+  private_dns_enabled = true
+}
+```
+
+By enabling `private_dns_enabled`, all internal AWS SDK calls to `bedrock-runtime.us-east-1.amazonaws.com` automatically resolve to the private endpoint IP addresses.
+
+### Hardening the VPC Endpoint Policy
+
+Just creating the endpoint isn't enough. We must enforce *who* and *what* can use it. We apply a VPC Endpoint Policy that explicitly restricts access to authorized IAM roles.
+
+```json
+{
+  "Statement": [
+    {
+      "Action": "bedrock:InvokeModel",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:role/EnterpriseBedrockAgentRole"
+      },
+      "Resource": "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+    }
+  ]
+}
+```
+
+---
+
+## 3. Integrating Fortinet FortiGate and SD-WAN
+
+While the VPC Endpoint secures traffic *within* AWS, enterprise environments often have hybrid on-premise components or branch offices (e.g., bank branches) that need to securely interact with the Bedrock APIs.
+
+This is where **Fortinet NSE 5** level architecture comes into play. We route all AI traffic through a FortiGate Next-Generation Firewall (NGFW) using an IPsec tunnel or AWS Transit Gateway.
+
+### FortiGate SD-WAN Rule for AI Traffic
+
+To ensure high availability and lowest latency for AI inferences, we configure an SD-WAN rule that prioritizes AWS Bedrock traffic.
+
+```text
+config system sdwan
+    config service
+        edit 1
+            set name "AWS-Bedrock-Traffic"
+            set mode priority
+            set dst "AWS_Bedrock_VPC_Subnets"
+            set src "Internal_Corporate_Network"
+            set priority-members 1 2
+        next
+    end
+end
+```
+
+### Content and Web Filtering
+
+Even with encrypted traffic (TLS 1.3), FortiGate's SSL Deep Inspection allows us to enforce **Content Filtering** on the payload being sent to Bedrock.
+
+If an internal user attempts to paste a patient's medical record or a bank client's social insurance number into an internal AI chat tool, the FortiGate DLP (Data Loss Prevention) sensor intercepts and drops the packet *before* it ever leaves the corporate network.
+
+```text
+config dlp sensor
+    edit "PII_Protection"
+        config entries
+            edit 1
+                set type dictionary
+                set dictionary "Credit_Card_Numbers"
+                set action block
+            next
+        end
+    next
+end
+```
+
+## 4. Conclusion
+
+Securing AI is a multi-disciplinary effort. By combining the cloud-native isolation of AWS VPC Endpoints with the robust, edge-level inspection of Fortinet FortiGate firewalls and SD-WAN policies, you achieve the rigorous compliance necessary for deploying Agentic AI in the banking and healthcare sectors.

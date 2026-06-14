@@ -1,0 +1,80 @@
+---
+title: "Threat Modeling for Generative AI in Canadian Banking"
+description: "Applying the STRIDE methodology to Agentic AI workflows, ensuring rigorous compliance and seamless ServiceNow release management integration."
+date: "2026-06-10T00:37:48.150Z"
+updatedAt: "2026-06-13T23:45:00.000Z"
+author: "Gopi Krishna Pamidala"
+category: "AI Security"
+tags: ["threat modeling", "stride", "banking compliance", "servicenow", "agentic ai"]
+featured: false
+published: true
+---
+
+Deploying Generative AI applications in a Canadian banking environment—such as my experience at TD Bank—requires significantly more rigor than deploying a standard web application. You cannot simply rely on penetration testing at the end of the SDLC. 
+
+Security must be shifted left. This requires comprehensive **Threat Modeling** during the architectural phase, ensuring every AI component complies with strict financial regulations (e.g., OSFI guidelines) before a ServiceNow Release ticket is even drafted.
+
+In this guide, we will adapt the classic **STRIDE** threat modeling framework specifically for Generative AI and Agentic AI workloads.
+
+---
+
+## The STRIDE Model for AI
+
+STRIDE stands for Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege. Let's examine how each applies to an AI Agent backed by AWS Bedrock.
+
+### 1. Spoofing Identity
+*Threat:* An attacker impersonates a legitimate user to interact with a high-privilege AI agent (e.g., a financial advisor copilot).
+*AI Context:* If the Agent relies on the user's session token to fetch data from a backend API, token theft allows the attacker to use the AI to summarize or extract the victim's data.
+*Mitigation:* Implement rigorous API Gateway validation and ensure the Bedrock Agent inherently uses short-lived, finely-scoped IAM session tokens for backend retrieval, verified against the calling user's Identity Provider (IdP).
+
+### 2. Tampering with Data
+*Threat:* An attacker modifies the data the AI relies on to make decisions.
+*AI Context:* **Prompt Injection** and **Data Poisoning**. An attacker might hide malicious instructions in a PDF uploaded to a Knowledge Base, tampering with the Agent's RAG (Retrieval-Augmented Generation) context.
+*Mitigation:* Implement strict content filtering using FortiGate Web Application Firewalls (WAF) before documents reach the vector database, and utilize Amazon Bedrock Guardrails to sanitize inputs.
+
+### 3. Repudiation
+*Threat:* A user denies performing an action, and the system lacks the logs to prove otherwise.
+*AI Context:* An AI Agent executes a financial trade on behalf of a user, but the user claims they never asked the AI to do so.
+*Mitigation:* All AI interactions and subsequent API calls must be logged immutably.
+```json
+// Example: Immutable Audit Log Structure sent to Wazuh XDR
+{
+  "timestamp": "2026-06-13T14:32:01Z",
+  "user_id": "usr_99823",
+  "bedrock_trace_id": "req-12345",
+  "original_prompt": "[MASKED_PII]",
+  "agent_action_taken": "EXECUTE_TRADE",
+  "action_status": "SUCCESS"
+}
+```
+
+### 4. Information Disclosure
+*Threat:* The system exposes sensitive data to unauthorized individuals.
+*AI Context:* The LLM memorizes sensitive Canadian banking PII from fine-tuning data and accidentally hallucinates it into a response for a different user.
+*Mitigation:* Never fine-tune models on raw customer PII. Always use synthetic data or heavily masked datasets. Enforce Data Loss Prevention (DLP) at the network boundary using Fortinet solutions.
+
+### 5. Denial of Service (DoS)
+*Threat:* An attacker overwhelms the system, making it unavailable to legitimate users.
+*AI Context:* Attackers send extremely long, highly complex prompts designed to maximize token generation, causing AWS Bedrock throttling limits to hit and spiking cloud costs.
+*Mitigation:* Implement strict rate limiting at the API Gateway level and utilize the `maxTokens` configuration in the Bedrock Converse API.
+
+### 6. Elevation of Privilege
+*Threat:* An unprivileged user gains administrative access.
+*AI Context:* A standard user utilizes prompt injection to convince an Agent (which has overly broad IAM permissions) to access administrative AWS APIs.
+*Mitigation:* **Zero Trust**. The AI Agent must operate with the Principle of Least Privilege. If the Agent only needs to read from a specific S3 bucket, its IAM role must explicitly deny all other actions.
+
+---
+
+## Integrating Threat Modeling into ServiceNow
+
+In an enterprise banking environment, threat modeling cannot be an isolated exercise. It must be integrated into the Release Management lifecycle.
+
+Before any AI application is approved for deployment, the architecture team must submit the completed STRIDE Threat Model as a mandatory artifact in the **ServiceNow Change Request (CR)**.
+
+1. **Automated Validation:** A ServiceNow workflow validates that mitigations for all identified threats are linked to successful integration tests in the CI/CD pipeline.
+2. **Security Sign-off:** The Infosec team reviews the attached threat model. Without it, the CR is automatically blocked.
+3. **Continuous Monitoring:** Post-deployment, the mitigations outlined in the threat model (e.g., rate limiting, DLP blocking) are continuously audited by Wazuh XDR.
+
+## Conclusion
+
+Threat modeling for Generative AI requires a paradigm shift. By systematically applying the STRIDE framework and mandating its inclusion in ServiceNow release gates, financial institutions can safely harness the power of Agentic AI while maintaining absolute regulatory compliance.
