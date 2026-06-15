@@ -65,9 +65,9 @@ export default function Hero() {
             transition={{ delay: 0.1, duration: 0.6 }}
             className="text-4xl sm:text-5xl xl:text-6xl font-bold tracking-tight leading-[1.08] mb-5"
           >
-            <span className="text-foreground">AI Security Engineer</span>
+            <span className="text-foreground">AI and Cybersecurity</span>
             <br />
-            <span className="gradient-text">& Full-Stack Developer</span>
+            <span className="gradient-text">Specialist</span>
           </motion.h1>
 
           {/* Subheadline */}
@@ -77,9 +77,9 @@ export default function Hero() {
             transition={{ delay: 0.2, duration: 0.5 }}
             className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-xl mb-8"
           >
-            5+ years of Software Engineering experience in Canadian Banking and Healthcare.{" "}
+            5+ years of experience in Canadian Banking and Healthcare IT environments.{" "}
             Specializing in <span className="text-cyan-400 font-medium">AI Security</span>,{" "}
-            <span className="text-cyan-400 font-medium">AWS Bedrock Guardrails</span>,{" "}
+            <span className="text-cyan-400 font-medium">Threat Modeling</span>,{" "}
             Incident Management, and Network Security (Fortinet).
           </motion.p>
 

@@ -4,7 +4,7 @@ import { Shield, Cloud, Brain, Lock, Network, Cpu, Award, ExternalLink, Mail, Do
 
 export const metadata: Metadata = {
   title: "About",
-  description: "Learn about Gopi Krishna Pamidala — AI Security Engineer specializing in AWS Bedrock, Agentic AI, LLM Security, and Cybersecurity with Fortinet NSE 7, AWS SAA, and CompTIA Security+ certifications.",
+  description: "Learn about Gopi Krishna Pamidala — AI and Cybersecurity Specialist focusing on Threat Modeling, LLM Security, and Fortinet NSE.",
 };
 
 const EXPERTISE = [
@@ -24,18 +24,17 @@ const CERTIFICATIONS = [
 
 const EXPERIENCE = [
   {
-    role: "Software Engineer",
+    role: "Cybersecurity Specialist",
     company: "TD Bank",
     period: "2022 – 2025",
     bullets: [
       "Specialized in Incident and Release management using ServiceNow",
       "Implemented OWASP security standards across banking infrastructure",
-      "Built AI Agents and workflows using AWS Bedrock",
       "Maintained strict compliance for Canadian banking systems",
     ],
   },
   {
-    role: "Network & Security Engineer",
+    role: "Network & Security Analyst",
     company: "Canadian Healthcare & Enterprise",
     period: "Prior to 2022",
     bullets: [

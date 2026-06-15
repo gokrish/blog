@@ -12,7 +12,7 @@ export default function ResumePage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-12 gap-4">
         <div>
           <h1 className="text-4xl font-bold tracking-tight mb-2">Gopi Krishna Pamidala</h1>
-          <p className="text-lg text-cyan-400 font-mono">Software Engineer & AI Security Specialist</p>
+          <p className="text-lg text-cyan-400 font-mono">AI and Cybersecurity Specialist</p>
         </div>
         <div className="flex gap-3">
           <a
@@ -43,8 +43,8 @@ export default function ResumePage() {
         <section>
           <h2 className="text-2xl font-bold border-b border-border pb-2 mb-4">Professional Summary</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Software Engineer with 5+ years of experience across Canadian Banking and Healthcare sectors. 
-            Currently specializing in AI Security, AWS Bedrock agent development, and enterprise incident management. 
+            Cybersecurity Specialist with 5+ years of experience across Canadian Banking and Healthcare sectors. 
+            Currently specializing in AI Security, threat modeling, and enterprise incident management. 
             Proven track record of maintaining rigorous OWASP compliance in highly regulated environments (TD Bank). 
             Deeply experienced in network security through Fortinet systems (NSE 1-5, FortiAnalyzer) and 
             home lab experimentation using Wazuh XDR and Oracle Cloud Infrastructure (OCI).
@@ -57,15 +57,11 @@ export default function ResumePage() {
           
           <div className="mb-8">
             <div className="flex flex-col sm:flex-row justify-between mb-2">
-              <h3 className="text-lg font-semibold text-foreground">Software Engineer</h3>
+              <h3 className="text-lg font-semibold text-foreground">Cybersecurity Specialist</h3>
               <span className="text-sm font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded self-start">2022 – 2025</span>
             </div>
             <div className="text-muted-foreground font-medium mb-3">TD Bank (Canada)</div>
             <ul className="space-y-2 list-none pl-0">
-              <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                <span className="text-cyan-400 mt-1">›</span>
-                Built and integrated advanced AI workflows and agents utilizing AWS Bedrock.
-              </li>
               <li className="flex items-start gap-2 text-sm text-muted-foreground">
                 <span className="text-cyan-400 mt-1">›</span>
                 Spearheaded Incident and Release Management pipelines using ServiceNow, drastically reducing MTTR.
@@ -76,14 +72,14 @@ export default function ResumePage() {
               </li>
               <li className="flex items-start gap-2 text-sm text-muted-foreground">
                 <span className="text-cyan-400 mt-1">›</span>
-                Developed and implemented AI Guardrails and system prompts for production-ready language models.
+                Audited and validated deployment pipelines to ensure zero-trust architectures in highly regulated workflows.
               </li>
             </ul>
           </div>
 
           <div>
             <div className="flex flex-col sm:flex-row justify-between mb-2">
-              <h3 className="text-lg font-semibold text-foreground">Software & Network Security Engineer</h3>
+              <h3 className="text-lg font-semibold text-foreground">Network & Security Analyst</h3>
               <span className="text-sm font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded self-start">Prior to 2022</span>
             </div>
             <div className="text-muted-foreground font-medium mb-3">Healthcare & Enterprise Sectors (Canada)</div>
